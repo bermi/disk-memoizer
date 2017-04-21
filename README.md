@@ -1,2 +1,4 @@
 # disk-memoizer
-Simple disk memoization for caching hight latency IO responses
+
+Simple disk memoization and in memory LRU cache for hight latency IO responses.
+

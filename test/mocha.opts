@@ -1,0 +1,6 @@
+--reporter spec
+--ui bdd
+--recursive
+--growl
+--timeout 90000
+--require ./test/config.js
