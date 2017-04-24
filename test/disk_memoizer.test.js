@@ -1,4 +1,4 @@
-/* eslint no-sync: 0, init-declarations: 0 */
+/* eslint no-sync: 0, init-declarations: 0, max-lines: 0 */
 
 const diskMemoizer = require("../lib/disk_memoizer");
 const assert = require("assert");

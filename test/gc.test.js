@@ -32,7 +32,6 @@ describe("When performing gc", () => {
   });
 
   after((done) => {
-    console.log(aPath);
     fs.writeFile(aPath, "a", done);
   });
 
