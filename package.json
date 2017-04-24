@@ -4,7 +4,7 @@
   "description": "Simple disk memoization and in memory LRU cache for hight latency IO responses",
   "main": "lib/disk_memoizer.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "eslint lib test; mocha"
   },
   "repository": {
     "type": "git",
@@ -15,6 +15,7 @@
     "ssd",
     "disk",
     "memoize",
+    "memoization",
     "network",
     "performance",
     "latency",

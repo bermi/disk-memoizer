@@ -35,6 +35,13 @@ describe("Disk memoizer", () => {
         expectedCachePath);
     });
 
+    it("should allow custom cache base", () => {
+      assert.equal(diskMemoizer.getCachePath(testingUrl, "/foo/"),
+        "/foo/c1/49/90/9e283ee6746623d46266824e7b.cache");
+      assert.equal(diskMemoizer.getCachePath(testingUrl, "/foo"),
+        "/foo/c1/49/90/9e283ee6746623d46266824e7b.cache");
+    });
+
     it("should grab and cache", (done) => {
       assert.throws(() => {
         fs.readFileSync(expectedCachePath);
@@ -42,6 +49,32 @@ describe("Disk memoizer", () => {
       diskMemoizer.grabAndCache({
           key: testingUrl,
           type: "json",
+          cachePath: expectedCachePath,
+          unmemoizedFn: (url, callback) => {
+            callback(null, jsonDoc);
+          },
+        },
+        (err, doc) => {
+          if (err) {
+            throw err;
+          }
+          assert.deepEqual(doc, jsonDoc);
+          assert.deepEqual(
+            JSON.parse(fs.readFileSync(expectedCachePath)), jsonDoc
+          );
+          fs.unlinkSync(expectedCachePath);
+          done();
+        }
+      );
+    });
+
+    it("should allow using a custom marshaller", (done) => {
+      assert.throws(() => {
+        fs.readFileSync(expectedCachePath);
+      }, Error);
+      diskMemoizer.grabAndCache({
+          key: testingUrl,
+          marshaller: diskMemoizer.marshallers.json,
           cachePath: expectedCachePath,
           unmemoizedFn: (url, callback) => {
             callback(null, jsonDoc);
