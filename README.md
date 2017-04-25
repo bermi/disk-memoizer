@@ -101,6 +101,9 @@ environment variables.
 Memoized function contain a `.gc` method that will trigger garbage collection
 for the selected `cacheDir` and `maxAge`.
 
+*WARNING*: gc will only work on the master node of a cluster,
+not in it's workers. It's recommended that you run gc on a separated process.
+
 
     const memoizedFn = diskMemoizer(fn, [options]);
     const gcInterval = memoizedFn.gc({
@@ -110,7 +113,6 @@ for the selected `cacheDir` and `maxAge`.
     });
 
     // clear the gcInterval by calling clearInterval(gcInterval)
-
 
 
 ## Running tests
