@@ -1,7 +1,7 @@
 {
   "name": "disk-memoizer",
   "version": "1.0.1",
-  "description": "Simple disk memoization and in memory LRU cache for hight latency IO responses",
+  "description": "Simple disk memoization and in memory LRU cache for high latency IO responses",
   "main": "lib/disk_memoizer.js",
   "scripts": {
     "test": "eslint lib test; mocha"
