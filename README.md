@@ -39,7 +39,7 @@ Simple disk memoization and in [memory LRU cache](https://www.npmjs.com/package/
 None of the following options are required:
 
     {
-      // Number of seconds before considering the cache stale
+      // Number of milliseconds before considering the cache stale
       // By default the cache won't expire
       maxAge,
 

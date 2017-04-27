@@ -260,6 +260,52 @@ describe("Disk memoizer", () => {
       });
     });
 
+    it("should serve JSON from memory when using a custom identity", (done) => {
+
+      let firstResponse;
+      const url = testingUrl;
+      const expectedCachePath = path.normalize(
+        `${tmpDir}/disk-memoizer/98/62/1a/54311f9688df65384d7e4011e0.cache`
+      );
+
+      const memoizedGetJson = diskMemoizer(({url}, callback) => {
+        firstResponse = firstResponse || getResponseJson();
+        callback(null, firstResponse);
+      }, {
+        maxAge: 0,
+        type: "json",
+        memoryCacheItems: 2,
+        identity: (opts) => JSON.stringify(opts)
+      });
+
+      memoizedGetJson({url}, (err, doc) => {
+        if (err) {
+          throw err;
+        }
+        assert.equal(doc.ts, firstResponse.ts);
+
+        fs.unlinkSync(expectedCachePath);
+
+        const previousResponseTs = firstResponse.ts;
+        firstResponse = null;
+        setTimeout(() => {
+
+          memoizedGetJson({url}, (err, doc) => {
+            if (err) {
+              throw err;
+            }
+            // Although we don't have an item in the fs
+            // we'll still get the copy from memory
+            assert.equal(doc.ts, previousResponseTs);
+
+            done();
+          });
+        }, 20);
+
+      });
+    });
+
+
     it("should limit items in memory", (done) => {
 
       let counter = 0;
