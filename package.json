@@ -1,6 +1,6 @@
 {
   "name": "disk-memoizer",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "description": "Simple disk memoization and in memory LRU cache for high latency IO responses",
   "main": "dist/disk_memoizer.js",
   "scripts": {
