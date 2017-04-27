@@ -92,7 +92,6 @@ module.exports = {
       "ignoreRegExpLiterals": true,
       "ignoreTemplateLiterals": true
     }],
-    "max-lines": "error",
     "max-nested-callbacks": "error",
     "max-params": "off",
     "max-statements": "error",

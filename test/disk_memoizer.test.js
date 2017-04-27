@@ -1,6 +1,6 @@
 /* eslint no-sync: 0, init-declarations: 0, max-lines: 0 */
 
-const diskMemoizer = require("../lib/disk_memoizer");
+const diskMemoizer = require("../");
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
