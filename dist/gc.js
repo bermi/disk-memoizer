@@ -40,11 +40,11 @@ function gcTmpFiles() {
       async.eachLimit(Object.keys(filesToDelete), 100, fs.unlink, function (err) {
         if (err) {
           // When there are no files to gc we might get an error from find
-          debug("[warning] gc failed with error: %s", err.message);
+          debug("[warning] gc on %s failed with error: %s", cacheDir, err.message);
         } else {
-          debug("[info] gc completed: %j", filesToDelete);
+          debug("[info] gc completed on %s: %j", cacheDir, filesToDelete);
         }
-        debug("[info] next gc run in %dms", interval);
+        debug("[info] next gc run for %s in %dms", cacheDir, interval);
       });
     });
   }
