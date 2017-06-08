@@ -54,7 +54,7 @@ function diskMemoizer(unmemoizedFn) {
     });
 
     if (!config.FLUSH_CACHE && memoryCache.has(key)) {
-      debug("[info] Using in memory cache for %s", key);
+      debug("[info] Using in memory cache (%d items) for %s", memoryCache.length, key);
       return callback(null, memoryCache.get(key));
     }
 
