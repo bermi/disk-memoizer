@@ -87,14 +87,18 @@ function diskMemoizer(unmemoizedFn) {
     });
   }
 
+  var currentCacheDir = cacheDir;
+  var currentMaxAge = maxAge;
+
   diskMemoized.gc = function gc() {
     var _ref2 = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {},
         _ref2$interval = _ref2.interval,
         interval = _ref2$interval === undefined ? config.GC_INTERVAL : _ref2$interval,
-        _ref2$cacheDir = _ref2.cacheDir,
-        cacheDir = _ref2$cacheDir === undefined ? cacheDir : _ref2$cacheDir,
-        _ref2$maxAge = _ref2.maxAge,
-        maxAge = _ref2$maxAge === undefined ? maxAge : _ref2$maxAge;
+        cacheDir = _ref2.cacheDir,
+        maxAge = _ref2.maxAge;
+
+    cacheDir = cacheDir || currentCacheDir;
+    maxAge = maxAge || currentMaxAge;
 
     debug("[info] GC Running with options %j", {
       maxAge: maxAge,

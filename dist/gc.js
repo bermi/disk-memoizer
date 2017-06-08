@@ -22,6 +22,11 @@ function gcTmpFiles() {
       cacheDir = _ref$cacheDir === undefined ? config.CACHE_DIR : _ref$cacheDir;
 
   if (config.GC) {
+    debug("[info] Registering GC with options %j", {
+      cacheDir: cacheDir,
+      interval: interval,
+      maxAge: maxAge
+    });
     runGc();
     return setInterval(runGc, interval);
   }
