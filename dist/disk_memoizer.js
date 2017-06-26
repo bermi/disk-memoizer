@@ -219,6 +219,17 @@ function hasExpired(maxAge, creationTime) {
   return maxAge && creationTime ? new Date().getTime() - maxAge > creationTime.getTime() : false;
 }
 
+var errorObject = { value: null };
+
+function tryCatch(fn, ctx, args) {
+  try {
+    return Reflect.apply(fn, ctx, args);
+  } catch (error) {
+    errorObject.value = error;
+    return errorObject;
+  }
+}
+
 var marshallers = {
   none: {
     marshall: function marshall(data, callback) {
@@ -230,20 +241,22 @@ var marshallers = {
   },
   json: {
     marshall: function marshall(data, callback) {
-      try {
-        callback(null, JSON.stringify(data));
-      } catch (err) {
-        callback(new Error("Invalid JSON. Got error " + err.message));
+      var result = tryCatch(JSON.stringify, null, [data]);
+      if (result === errorObject) {
+        callback(new Error("Can't stringify data. Got error\n        " + result.value.message));
+      } else {
+        callback(null, result);
       }
     },
     unmarshall: function unmarshall(data, callback) {
       if (!(data instanceof String) && !(data instanceof Buffer)) {
         return callback(null, data);
       }
-      try {
-        callback(null, JSON.parse(data));
-      } catch (err) {
-        callback(new Error("Can't stringify data. Got error " + err.message));
+      var result = tryCatch(JSON.parse, null, [data]);
+      if (result === errorObject) {
+        callback(new Error("Invalid JSON. Got error " + result.value.message));
+      } else {
+        callback(null, result);
       }
     }
   }
