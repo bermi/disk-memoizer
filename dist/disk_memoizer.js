@@ -223,7 +223,7 @@ var errorObject = { value: null };
 
 function tryCatch(fn, ctx, args) {
   try {
-    return Reflect.apply(fn, ctx, args);
+    return fn.apply(ctx, args);
   } catch (error) {
     errorObject.value = error;
     return errorObject;
