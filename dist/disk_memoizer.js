@@ -240,24 +240,29 @@ function waitForLockRelease(_ref4, callback) {
   // We only want to keep one lock watcher per lock path
   var hasWatcher = !!lockWatchers[lockPath];
 
+  lockWatchers[lockPath] = lockWatchers[lockPath] || [];
+  var currentWatchList = lockWatchers[lockPath];
+
   if (hasWatcher) {
     // If there's already a watcher there's no need to register a new
     // one, we'll defer the execution of the task until the watcher notifies
     // about changes on the lock
-    lockWatchers[lockPath].push(runOnLockReleased);
+    currentWatchList.push(runOnLockReleased);
   } else {
+
     // Register a singleton watcher for a particular lock file
-    lockWatchers[lockPath] = [];
-    lockWatchers[lockPath].watcher = function () {
+
+    var _watcherFn = null;
+    _watcherFn = function watcherFn() {
       runOnLockReleased();
       // Run all the watchers
-      lockWatchers[lockPath].forEach(function (watcher) {
+      currentWatchList.forEach(function (watcher) {
         return watcher();
       });
-      fs.unwatchFile(lockPath, lockWatchers[lockPath].watcher);
-      delete lockWatchers[lockPath];
+      fs.unwatchFile(lockPath, _watcherFn);
+      currentWatchList.splice(0, currentWatchList.length);
     };
-    fs.watch(lockPath, lockWatchers[lockPath].watcher);
+    fs.watch(lockPath, _watcherFn);
   }
 
   function runOnLockReleased() {
