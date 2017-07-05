@@ -2,6 +2,8 @@
 
 Simple disk memoization and in [memory LRU cache](https://www.npmjs.com/package/lru-cache) for speeding up frequently accessed high latency IO resources.
 
+Queues up concurrent requests for the same resource before it has been cached to avoid fetching it multiple times in parallel.
+
 
 [![Build Status](https://api.travis-ci.org/bermi/disk-memoizer.svg)](http://travis-ci.org/bermi/disk-memoizer)  [![Dependency Status](https://david-dm.org/bermi/disk-memoizer.svg)](https://david-dm.org/bermi/disk-memoizer) [![](http://img.shields.io/npm/v/disk-memoizer.svg) ![](http://img.shields.io/npm/dm/disk-memoizer.svg)](https://www.npmjs.org/package/disk-memoizer)
 
@@ -76,7 +78,13 @@ None of the following options are required:
       // that each worker on a cluster will keep it's own copy.
       // Defaults to 0 or the environment variable
       // DISK_MEMOIZER_MEMORY_CACHE_ITEMS
-      memoryCacheItems
+      memoryCacheItems,
+
+      // lru-cache options
+      lruCacheOptions = {
+        max: memoryCacheItems,
+        maxAge
+      }
     }
 
 
@@ -93,7 +101,7 @@ environment variables.
 | DISK_MEMOIZER_GC | true | Disables memoization garbage collection when set to false. Garbage collection will not take place on cluster workers, so you'll have to require disk-memoizer on a master process. |
 | DISK_MEMOIZER_GC_INTERVAL | 300000 (5 minutes) | Seconds to wait between running the garbage collector. |
 | DISK_MEMOIZER_GC_LAST_ACCESS | 1h | When removing old files only those that have not been accessed for the specified time will be removed. |
-
+| DISK_MEMOIZER_LOCK_STALE_MS | 30000 | Milliseconds for the cache lock to be considerer stale. |
 
 
 ### Garbage collection

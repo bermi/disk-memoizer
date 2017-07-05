@@ -1,8 +1,9 @@
-/* eslint no-sync: 0, init-declarations: 0, max-lines: 0 */
+/* eslint no-sync: 0, init-declarations: 0, max-lines: 0, max-statements: 0 */
 
 const diskMemoizer = require("../");
+
 const assert = require("assert");
-const fs = require("fs");
+const fs = require("graceful-fs");
 const path = require("path");
 const os = require("os");
 
@@ -166,6 +167,34 @@ describe("Disk memoizer", () => {
       });
     });
 
+
+    const concurrentCalls = 1000;
+    it(`should allow ${concurrentCalls} concurrent requests`, (done) => {
+      fs.unlink(expectedCachePath, () => {
+        let fetchCount = 0;
+        const memoizedFn = diskMemoizer((url, callback) => {
+          fetchCount += 1;
+          assert.equal(fetchCount, 1, "Fetch only expected once");
+          callback(null, jsonDoc);
+        }, {type: "json"});
+
+        let callbackCount = 0;
+        [...Array(concurrentCalls)].map(() => memoizedFn(testingUrl,
+            (err, doc) => {
+              if (err) {
+                return done(err);
+              }
+              callbackCount += 1;
+              assert.deepEqual(doc, jsonDoc);
+
+              if (callbackCount === concurrentCalls) {
+                done();
+              }
+            }
+          ));
+      });
+    });
+
   });
 
   context("functional tests", () => {
@@ -268,7 +297,7 @@ describe("Disk memoizer", () => {
         `${tmpDir}/disk-memoizer/98/62/1a/54311f9688df65384d7e4011e0.cache`
       );
 
-      const memoizedGetJson = diskMemoizer(({url}, callback) => {
+      const memoizedGetJson = diskMemoizer((url, callback) => {
         firstResponse = firstResponse || getResponseJson();
         callback(null, firstResponse);
       }, {

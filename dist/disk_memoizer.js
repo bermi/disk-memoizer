@@ -10,7 +10,7 @@ function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr
 // Check the README.md file for instructions and examples
 module.exports = diskMemoizer;
 
-var fs = require("fs");
+var fs = require("graceful-fs");
 var config = require("./config");
 var gcTmpFiles = require("./gc");
 var debug = require("debug")("disk-memoizer");
@@ -18,9 +18,10 @@ var path = require("path");
 var mkdirp = require("mkdirp");
 var createHash = require("crypto").createHash;
 var LruCache = require("lru-cache");
+var lockFile = require("lockfile");
 
-// Used to convert md5 hashes into subfolder chunks
-var RE_PATHIFY = /^([a-z0-9]{2})([a-z0-9]{2})([a-z0-9]{2})(.+)/;
+var os = require("os");
+var LOCK_TMP_DIR = os.tmpdir();
 
 function diskMemoizer(unmemoizedFn) {
   var _ref = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {},
@@ -33,12 +34,16 @@ function diskMemoizer(unmemoizedFn) {
       _ref$cacheDir = _ref.cacheDir,
       cacheDir = _ref$cacheDir === undefined ? config.CACHE_DIR : _ref$cacheDir,
       _ref$memoryCacheItems = _ref.memoryCacheItems,
-      memoryCacheItems = _ref$memoryCacheItems === undefined ? config.MEMORY_CACHE_ITEMS : _ref$memoryCacheItems;
-
-  var memoryCache = memoryCacheItems > 0 ? new LruCache({
+      memoryCacheItems = _ref$memoryCacheItems === undefined ? config.MEMORY_CACHE_ITEMS : _ref$memoryCacheItems,
+      _ref$lockStale = _ref.lockStale,
+      lockStale = _ref$lockStale === undefined ? config.LOCK_STALE_MS : _ref$lockStale,
+      _ref$lruCacheOptions = _ref.lruCacheOptions,
+      lruCacheOptions = _ref$lruCacheOptions === undefined ? {
     max: memoryCacheItems,
     maxAge: maxAge
-  }) : fakeLruCache();
+  } : _ref$lruCacheOptions;
+
+  var memoryCache = memoryCacheItems > 0 || lruCacheOptions.max > 0 ? new LruCache(lruCacheOptions) : fakeLruCache();
 
   function diskMemoized() {
     for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
@@ -72,6 +77,7 @@ function diskMemoizer(unmemoizedFn) {
           args: args,
           marshaller: marshaller,
           memoryCache: memoryCache,
+          lockStale: lockStale,
           type: type
         }, callback);
       } else {
@@ -80,6 +86,7 @@ function diskMemoizer(unmemoizedFn) {
           cachePath: cachePath,
           unmemoizedFn: unmemoizedFn,
           marshaller: marshaller,
+          lockStale: lockStale,
           memoryCache: memoryCache,
           type: type
         }, callback);
@@ -116,10 +123,17 @@ function diskMemoizer(unmemoizedFn) {
   return diskMemoized;
 }
 
+// Used to convert md5 hashes into subfolder chunks
+var RE_PATHIFY = /^([a-z0-9]{2})([a-z0-9]{2})([a-z0-9]{2})(.+)/;
+
 function getCachePath(key) {
   var cacheDir = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : config.CACHE_DIR;
 
   return path.normalize(cacheDir + "/" + createHash("md5").update(key).digest("hex").replace(RE_PATHIFY, "$1/$2/$3/$4") + ".cache");
+}
+
+function getLockPath(key) {
+  return path.normalize(LOCK_TMP_DIR + "/" + createHash("md5").update(key).digest("hex") + ".lock");
 }
 
 function grabAndCache(_ref3, callback) {
@@ -131,8 +145,30 @@ function grabAndCache(_ref3, callback) {
       marshaller = _ref3.marshaller,
       _ref3$memoryCache = _ref3.memoryCache,
       memoryCache = _ref3$memoryCache === undefined ? fakeLruCache() : _ref3$memoryCache,
+      lockStale = _ref3.lockStale,
       type = _ref3.type;
 
+
+  var lockPath = getLockPath(cachePath);
+
+  var isLocked = lockFile.checkSync(lockPath, { stale: lockStale });
+
+  if (isLocked) {
+    // We'll wait until the lock
+    waitForLockRelease({
+      lockPath: lockPath,
+      key: key,
+      cachePath: cachePath,
+      unmemoizedFn: unmemoizedFn,
+      marshaller: marshaller,
+      lockStale: lockStale,
+      memoryCache: memoryCache,
+      type: type
+    }, callback);
+    return;
+  }
+
+  lockFile.lockSync(lockPath, { stale: lockStale });
 
   unmemoizedFn.apply(undefined, _toConsumableArray(args.concat(grabAndCacheCallback)));
 
@@ -158,29 +194,95 @@ function grabAndCache(_ref3, callback) {
           return callback(err);
         }
 
-        fs.writeFile(cachePath, data, function (err) {
+        // We'll save the file on a temporary file to avoid in-flight files
+        // from being taken as complete
+        var tmpCachePath = cachePath + ".tmp";
+        fs.writeFile(tmpCachePath, data, function (err) {
           if (err) {
-            debug("[error] Failed saving %s. Got error: %s", cachePath, err.message);
-          } else {
-            debug("[info] Saved cache for %s on %s", key, cachePath);
+            debug("[error] Failed saving %s. Got error: %s", tmpCachePath, err.message);
+            return callback(err);
           }
-          memoryCache.set(key, unmarshalledData);
-          callback(null, unmarshalledData);
+          // Rename the file once it's persisted in disk to make it available
+          // to any queued cache
+          fs.rename(tmpCachePath, cachePath, function (err) {
+            if (err) {
+              debug("[error] Failed saving %s. Got error: %s", cachePath, err.message);
+              return callback(err);
+            }
+
+            debug("[info] Saved cache for %s on %s", key, cachePath);
+            memoryCache.set(key, unmarshalledData);
+
+            lockFile.unlock(lockPath, function (err) {
+              if (err) {
+                return callback(err);
+              }
+              callback(null, unmarshalledData);
+            });
+          });
         });
       });
     });
   }
 }
 
-function useCachedFile(_ref4, callback) {
-  var key = _ref4.key,
+var lockWatchers = {};
+function waitForLockRelease(_ref4, callback) {
+  var lockPath = _ref4.lockPath,
+      key = _ref4.key,
       cachePath = _ref4.cachePath,
       unmemoizedFn = _ref4.unmemoizedFn,
-      _ref4$marshaller = _ref4.marshaller,
-      marshaller = _ref4$marshaller === undefined ? marshallers.none : _ref4$marshaller,
-      _ref4$memoryCache = _ref4.memoryCache,
-      memoryCache = _ref4$memoryCache === undefined ? fakeLruCache() : _ref4$memoryCache,
+      marshaller = _ref4.marshaller,
+      lockStale = _ref4.lockStale,
+      memoryCache = _ref4.memoryCache,
       type = _ref4.type;
+
+  // We only want to keep one lock watcher per lock path
+  var hasWatcher = !!lockWatchers[lockPath];
+
+  if (hasWatcher) {
+    // If there's already a watcher there's no need to register a new
+    // one, we'll defer the execution of the task until the watcher notifies
+    // about changes on the lock
+    lockWatchers[lockPath].push(runOnLockReleased);
+  } else {
+    // Register a singleton watcher for a particular lock file
+    lockWatchers[lockPath] = [];
+    lockWatchers[lockPath].watcher = function () {
+      runOnLockReleased();
+      // Run all the watchers
+      lockWatchers[lockPath].forEach(function (watcher) {
+        return watcher();
+      });
+      fs.unwatchFile(lockPath, lockWatchers[lockPath].watcher);
+      delete lockWatchers[lockPath];
+    };
+    fs.watch(lockPath, lockWatchers[lockPath].watcher);
+  }
+
+  function runOnLockReleased() {
+    useCachedFile({
+      key: key,
+      cachePath: cachePath,
+      unmemoizedFn: unmemoizedFn,
+      marshaller: marshaller,
+      lockStale: lockStale,
+      memoryCache: memoryCache,
+      type: type
+    }, callback);
+  }
+}
+
+function useCachedFile(_ref5, callback) {
+  var key = _ref5.key,
+      cachePath = _ref5.cachePath,
+      unmemoizedFn = _ref5.unmemoizedFn,
+      _ref5$marshaller = _ref5.marshaller,
+      marshaller = _ref5$marshaller === undefined ? marshallers.none : _ref5$marshaller,
+      _ref5$memoryCache = _ref5.memoryCache,
+      memoryCache = _ref5$memoryCache === undefined ? fakeLruCache() : _ref5$memoryCache,
+      lockStale = _ref5.lockStale,
+      type = _ref5.type;
 
 
   marshaller = getMarshaller({
@@ -196,6 +298,7 @@ function useCachedFile(_ref4, callback) {
         cachePath: cachePath,
         unmemoizedFn: unmemoizedFn,
         marshaller: marshaller,
+        lockStale: lockStale,
         type: type
       }, callback);
     }
@@ -262,9 +365,9 @@ var marshallers = {
   }
 };
 
-function getMarshaller(_ref5) {
-  var type = _ref5.type,
-      marshaller = _ref5.marshaller;
+function getMarshaller(_ref6) {
+  var type = _ref6.type,
+      marshaller = _ref6.marshaller;
 
   if (marshallers[type]) {
     marshaller = marshallers[type];
