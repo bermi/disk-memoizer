@@ -5,7 +5,7 @@ process.env.DISK_MEMOIZER_LOCK_TIMEOUT = 5000;
 
 const cluster = require("cluster");
 const os = require("os");
-const concurrency = os.cpus().length * 5;
+const concurrency = 8;
 const request = require("request");
 const diskMemoizer = require("../../lib/disk_memoizer");
 const url = "https://upload.wikimedia.org/wikipedia/commons/0/05/01E_May_15_2013_1750Z.jpg";
