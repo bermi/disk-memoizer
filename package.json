@@ -51,6 +51,7 @@
     "lockfile": "^1.0.3",
     "lru-cache": "^4.0.2",
     "mkdirp": "^0.5.1",
-    "reltime": "^0.0.2"
+    "reltime": "^0.0.2",
+    "request": "^2.81.0"
   }
 }
