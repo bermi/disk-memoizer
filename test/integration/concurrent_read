@@ -1,0 +1,106 @@
+#!/usr/bin/env node
+
+process.env.DEBUG = "disk*,-*info*";
+process.env.DISK_MEMOIZER_LOCK_TIMEOUT = 5000;
+
+const cluster = require("cluster");
+const os = require("os");
+const concurrency = os.cpus().length * 5;
+const request = require("request");
+const diskMemoizer = require("../../lib/disk_memoizer");
+const url = "https://upload.wikimedia.org/wikipedia/commons/0/05/01E_May_15_2013_1750Z.jpg";
+const expectedMd5 = "6f89b783dfc72f5fc65d9d6074773664";
+const createHash = require("crypto").createHash;
+const assert = require("assert");
+const tmpDir = os.tmpdir();
+const path = require("path");
+const expectedCachePath = path.normalize(
+  `${tmpDir}/disk-memoizer/9b/2a/6d/641d9b7d3576652963cce823a4.cache`
+);
+
+const fs = require("fs");
+const getMemoizedImage = diskMemoizer((url, callback) => {
+  console.log("Starting download for %s", url);
+  request.get(url, {encoding: null}, (err, res) => {
+    if (err) {
+      throw err;
+    }
+    console.log("Download for %s completed", url);
+    process.send({cmd: "fileDownloaded"});
+    callback(err, res && res.body);
+  });
+});
+
+
+// Using cluster to create one process per CPU core
+if (cluster.isMaster) {
+
+  try {
+    fs.unlinkSync(expectedCachePath);
+  } catch (e) {
+    console.log(e.message);
+  }
+
+  console.log("Downloading %s with %d concurrent requests", url, concurrency);
+
+  cluster.on("exit", (worker) => {
+    console.error("worker %d died, exit code (%d).",
+      worker.process.pid, worker.process.exitCode);
+    process.exit(-1);
+  });
+
+  // Keep track of http requests
+  let downloadCount = 0;
+  let fileReadCount = 0;
+  setInterval(() => {
+    if (fileReadCount && !downloadCount) {
+      throw new Error(
+        "Can't read file contents before the download is complete"
+      );
+    }
+    if (downloadCount > 1) {
+      // console.warn(`Only 1 download was expected. Got ${downloadCount}`);
+      throw new Error(`Only 1 download was expected. Got ${downloadCount}`);
+    }
+    if (fileReadCount === concurrency) {
+      console.log("Test passed. %d processes could read the file correctly.",
+        concurrency);
+      process.exit(0);
+    }
+  }, 10);
+
+  function updateCounters(msg) {
+    if (msg.cmd) {
+      if (msg.cmd === "fileDownloaded") {
+        downloadCount += 1;
+      }
+      if (msg.cmd === "fileRead") {
+        fileReadCount += 1;
+      }
+    }
+  }
+
+  // Start workers and listen for messages containing fileDownloaded
+  for (let i = 0; i < concurrency; i += 1) {
+    cluster.fork();
+  }
+
+  for (const id in cluster.workers) {
+    cluster.workers[id].on("message", updateCounters);
+  }
+
+} else {
+
+  console.log("Trying to access %s", url);
+  getMemoizedImage(url, (err, data) => {
+    if (err) {
+      console.log(err);
+      throw err;
+    }
+
+    assert.equal(createHash("md5").update(data).digest("hex"), expectedMd5);
+
+    process.send({cmd: "fileRead"});
+  });
+}
+

@@ -4,7 +4,7 @@
   "description": "Simple disk memoization and in memory LRU cache for high latency IO responses",
   "main": "dist/disk_memoizer.js",
   "scripts": {
-    "test": "mocha",
+    "test": "mocha && ./test/integration/concurrent_read",
     "test:watch": "npm run test -- -w -G",
     "test:coverate-report": "nyc mocha && nyc report --reporter=html && echo 'Coverage report available on ./coverage/index.html'",
     "lint": "eslint lib test",
