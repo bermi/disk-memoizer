@@ -31,6 +31,7 @@ const getMemoizedImage = diskMemoizer((url, callback) => {
   });
 });
 
+console.log(`Running ${__filename} on ${concurrency} workers`);
 
 // Using cluster to create one process per CPU core
 if (cluster.isMaster) {

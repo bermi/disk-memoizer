@@ -151,26 +151,39 @@ function grabAndCache(_ref3, callback) {
 
   var lockPath = getLockPath(cachePath);
 
-  var isLocked = lockFile.checkSync(lockPath, { stale: lockStale });
+  lockFile.check(lockPath, { stale: lockStale }, function (err, isLocked) {
+    if (err) {
+      return callback(err);
+    }
 
-  if (isLocked) {
-    // We'll wait until the lock
-    waitForLockRelease({
-      lockPath: lockPath,
-      key: key,
-      cachePath: cachePath,
-      unmemoizedFn: unmemoizedFn,
-      marshaller: marshaller,
-      lockStale: lockStale,
-      memoryCache: memoryCache,
-      type: type
-    }, callback);
-    return;
-  }
+    if (isLocked) {
+      return delayedRead({
+        key: key,
+        cachePath: cachePath,
+        unmemoizedFn: unmemoizedFn,
+        marshaller: marshaller,
+        memoryCache: memoryCache,
+        lockStale: lockStale,
+        type: type
+      }, callback);
+    }
 
-  lockFile.lockSync(lockPath, { stale: lockStale });
-
-  unmemoizedFn.apply(undefined, _toConsumableArray(args.concat(grabAndCacheCallback)));
+    lockFile.lock(lockPath, { stale: lockStale }, function (err) {
+      if (err) {
+        // A concurrent lock? We'll try to read again in a bit
+        return delayedRead({
+          key: key,
+          cachePath: cachePath,
+          unmemoizedFn: unmemoizedFn,
+          marshaller: marshaller,
+          memoryCache: memoryCache,
+          lockStale: lockStale,
+          type: type
+        }, callback);
+      }
+      unmemoizedFn.apply(undefined, _toConsumableArray(args.concat(grabAndCacheCallback)));
+    });
+  });
 
   function grabAndCacheCallback(err, unmarshalledData) {
     if (err) {
@@ -194,31 +207,17 @@ function grabAndCache(_ref3, callback) {
           return callback(err);
         }
 
-        // We'll save the file on a temporary file to avoid in-flight files
-        // from being taken as complete
-        var tmpCachePath = cachePath + ".tmp";
-        fs.writeFile(tmpCachePath, data, function (err) {
+        fs.writeFile(cachePath, data, function (err) {
           if (err) {
-            debug("[error] Failed saving %s. Got error: %s", tmpCachePath, err.message);
+            debug("[error] Failed saving %s. Got error: %s", cachePath, err.message);
             return callback(err);
           }
-          // Rename the file once it's persisted in disk to make it available
-          // to any queued cache
-          fs.rename(tmpCachePath, cachePath, function (err) {
-            if (err) {
-              debug("[error] Failed saving %s. Got error: %s", cachePath, err.message);
-              return callback(err);
-            }
+          lockFile.unlock(lockPath, function () {
 
             debug("[info] Saved cache for %s on %s", key, cachePath);
             memoryCache.set(key, unmarshalledData);
 
-            lockFile.unlock(lockPath, function (err) {
-              if (err) {
-                return callback(err);
-              }
-              callback(null, unmarshalledData);
-            });
+            callback(null, unmarshalledData);
           });
         });
       });
@@ -226,56 +225,27 @@ function grabAndCache(_ref3, callback) {
   }
 }
 
-var lockWatchers = {};
-function waitForLockRelease(_ref4, callback) {
-  var lockPath = _ref4.lockPath,
-      key = _ref4.key,
+function delayedRead(_ref4, callback) {
+  var key = _ref4.key,
       cachePath = _ref4.cachePath,
       unmemoizedFn = _ref4.unmemoizedFn,
       marshaller = _ref4.marshaller,
-      lockStale = _ref4.lockStale,
       memoryCache = _ref4.memoryCache,
+      lockStale = _ref4.lockStale,
       type = _ref4.type;
 
-  // We only want to keep one lock watcher per lock path
-  var hasWatcher = !!lockWatchers[lockPath];
-
-  lockWatchers[lockPath] = lockWatchers[lockPath] || [];
-  var currentWatchList = lockWatchers[lockPath];
-
-  if (hasWatcher) {
-    // If there's already a watcher there's no need to register a new
-    // one, we'll defer the execution of the task until the watcher notifies
-    // about changes on the lock
-    currentWatchList.push(runOnLockReleased);
-  } else {
-
-    // Register a singleton watcher for a particular lock file
-
-    var _watcherFn = null;
-    _watcherFn = function watcherFn() {
-      runOnLockReleased();
-      // Run all the watchers
-      currentWatchList.forEach(function (watcher) {
-        return watcher();
-      });
-      fs.unwatchFile(lockPath, _watcherFn);
-      currentWatchList.splice(0, currentWatchList.length);
-    };
-    fs.watch(lockPath, _watcherFn);
-  }
-
-  function runOnLockReleased() {
+  // We'll wait until the lock
+  setTimeout(function () {
     useCachedFile({
       key: key,
       cachePath: cachePath,
       unmemoizedFn: unmemoizedFn,
       marshaller: marshaller,
-      lockStale: lockStale,
       memoryCache: memoryCache,
+      lockStale: lockStale,
       type: type
     }, callback);
-  }
+  }, 10);
 }
 
 function useCachedFile(_ref5, callback) {
@@ -295,30 +265,52 @@ function useCachedFile(_ref5, callback) {
     marshaller: marshaller
   });
 
-  fs.readFile(cachePath, function (err, dataFromCache) {
-
+  var lockPath = getLockPath(cachePath);
+  lockFile.check(lockPath, { stale: lockStale }, function (err, isLocked) {
     if (err) {
-      return grabAndCache({
+      return callback(err);
+    }
+    if (isLocked) {
+      // If we've got this far and there's still a lock file, we've
+      // probably hit a race condition with another concurrent process.
+      // We'll retry when the lock is released.
+      return delayedRead({
         key: key,
         cachePath: cachePath,
         unmemoizedFn: unmemoizedFn,
         marshaller: marshaller,
+        memoryCache: memoryCache,
         lockStale: lockStale,
         type: type
       }, callback);
     }
 
-    debug("[info] Using disk cache for %s from %s", key, cachePath);
+    fs.readFile(cachePath, function (err, dataFromCache) {
 
-    marshaller.unmarshall(dataFromCache, function (err, data) {
       if (err) {
-        debug("[warning] Not caching %s. Failed marshalling data. Got error %s", key, err.message);
-        unmemoizedFn(key, callback);
-        return;
+        debug("[warning] Failed reading file %s from cache %s", key, cachePath);
+        return grabAndCache({
+          key: key,
+          cachePath: cachePath,
+          unmemoizedFn: unmemoizedFn,
+          marshaller: marshaller,
+          lockStale: lockStale,
+          type: type
+        }, callback);
       }
 
-      memoryCache.set(key, data);
-      callback(null, data);
+      debug("[info] Using disk cache for %s from %s", key, cachePath);
+
+      marshaller.unmarshall(dataFromCache, function (err, data) {
+        if (err) {
+          debug("[warning] Not caching %s. Failed marshalling data. Got error %s", key, err.message);
+          unmemoizedFn(key, callback);
+          return;
+        }
+
+        memoryCache.set(key, data);
+        callback(null, data);
+      });
     });
   });
 }

@@ -101,7 +101,7 @@ environment variables.
 | DISK_MEMOIZER_GC | true | Disables memoization garbage collection when set to false. Garbage collection will not take place on cluster workers, so you'll have to require disk-memoizer on a master process. |
 | DISK_MEMOIZER_GC_INTERVAL | 300000 (5 minutes) | Seconds to wait between running the garbage collector. |
 | DISK_MEMOIZER_GC_LAST_ACCESS | 1h | When removing old files only those that have not been accessed for the specified time will be removed. |
-| DISK_MEMOIZER_LOCK_STALE_MS | 30000 | Milliseconds for the cache lock to be considerer stale. |
+| DISK_MEMOIZER_LOCK_STALE_MS | 5000 | Milliseconds for the cache lock to be considerer stale. |
 
 
 ### Garbage collection
