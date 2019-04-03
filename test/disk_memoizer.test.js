@@ -195,12 +195,10 @@ describe("Disk memoizer", () => {
       });
     });
 
-    it.only("should prevent race conditions with concurrent failing requests",
+    it("should prevent race conditions with concurrent failing requests",
      function timedTest(done) {
-      this.timeout(2000); // eslint-disable-line
+      this.timeout(500); // eslint-disable-line
       const concurrentCalls = 10;
-        const start = new Date();
-
       const expectedErrorMessage = "Forced failure";
       const memoizedFn = diskMemoizer((url, callback) => {
         callback(new Error(expectedErrorMessage));
@@ -211,11 +209,7 @@ describe("Disk memoizer", () => {
           (err) => {
             callbackCount += 1;
             assert.equal(err.message, expectedErrorMessage);
-            console.log(`Take ${callbackCount}, ${Math.ceil(
-              (new Date().getTime() - start.getTime())
-            ) / 1000} seconds`);
             if (callbackCount === concurrentCalls) {
-              console.log("All set");
               done();
             }
           }

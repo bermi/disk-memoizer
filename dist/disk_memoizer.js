@@ -185,9 +185,15 @@ function grabAndCache(_ref3, callback) {
     });
   });
 
+  function unlockAndReportError(err) {
+    lockFile.unlock(lockPath, function () {
+      callback(err);
+    });
+  }
+
   function grabAndCacheCallback(err, unmarshalledData) {
     if (err) {
-      return callback(err);
+      return unlockAndReportError(err);
     }
 
     marshaller = getMarshaller({
@@ -199,18 +205,18 @@ function grabAndCache(_ref3, callback) {
 
     mkdirp(cacheDir, function (err) {
       if (err) {
-        return callback(err);
+        return unlockAndReportError(err);
       }
 
       marshaller.marshall(unmarshalledData, function (err, data) {
         if (err) {
-          return callback(err);
+          return unlockAndReportError(err);
         }
 
         fs.writeFile(cachePath, data, function (err) {
           if (err) {
             debug("[error] Failed saving %s. Got error: %s", cachePath, err.message);
-            return callback(err);
+            return unlockAndReportError(err);
           }
           lockFile.unlock(lockPath, function () {
 
