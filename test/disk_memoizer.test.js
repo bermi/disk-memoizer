@@ -195,6 +195,27 @@ describe("Disk memoizer", () => {
       });
     });
 
+    it("should prevent race conditions with concurrent failing requests",
+     function timedTest(done) {
+      this.timeout(500); // eslint-disable-line
+      const concurrentCalls = 10;
+      const expectedErrorMessage = "Forced failure";
+      const memoizedFn = diskMemoizer((url, callback) => {
+        callback(new Error(expectedErrorMessage));
+      }, {type: "json"});
+
+      let callbackCount = 0;
+      [...Array(concurrentCalls)].map(() => memoizedFn("Fake URL",
+          (err) => {
+            callbackCount += 1;
+            assert.equal(err.message, expectedErrorMessage);
+            if (callbackCount === concurrentCalls) {
+              done();
+            }
+          }
+        ));
+    });
+
   });
 
   context("functional tests", () => {
