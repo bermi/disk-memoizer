@@ -131,7 +131,7 @@ not in it's workers. It's recommended that you run gc on a separated process.
 
 (The MIT License)
 
-Copyright (c) 2017 Fluid, Inc, Bermi Ferrer &lt;bferrer@fluid.com&gt;
+Copyright (c) 2019 Astound Commerce, Inc, Bermi Ferrer &lt;b.ferrer@astoundcommerce.com&gt;
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
