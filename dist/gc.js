@@ -8,7 +8,8 @@ var reltime = require("reltime");
 var fs = require("fs");
 var glob = require("glob");
 var path = require("path");
-var async = require("async");
+var eachLimit = require("async/eachLimit");
+var reduce = require("async/reduce");
 
 var RE_TRAIL_SLASH = /\/$/;
 
@@ -42,7 +43,7 @@ function gcTmpFiles() {
         return;
       }
 
-      async.eachLimit(Object.keys(filesToDelete), 100, fs.unlink, function (err) {
+      eachLimit(Object.keys(filesToDelete), 100, fs.unlink, function (err) {
         if (err) {
           // When there are no files to gc we might get an error from find
           debug("[warning] gc on %s failed with error: %s", cacheDir, err.message);
@@ -69,7 +70,7 @@ function getFilesToDelete(_ref2, callback) {
       return callback(err);
     }
 
-    async.reduce(files, {}, function (result, filepath, callback) {
+    reduce(files, {}, function (result, filepath, callback) {
 
       fs.stat(filepath, function (err, stat) {
         if (err) {

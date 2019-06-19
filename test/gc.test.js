@@ -1,7 +1,7 @@
 /* eslint no-sync: 0, init-declarations: 0 */
 
 const path = require("path");
-const gc = require("../dist/gc");
+const gc = require("../lib/gc");
 const getCachePath = require("../lib/disk_memoizer").getCachePath;
 const fs = require("fs");
 const assert = require("assert");

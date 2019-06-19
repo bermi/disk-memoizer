@@ -2,16 +2,13 @@
   "name": "disk-memoizer",
   "version": "3.0.0",
   "description": "Simple disk memoization and in memory LRU cache for high latency IO responses",
-  "main": "dist/disk_memoizer.js",
+  "main": "lib/disk_memoizer.js",
   "scripts": {
     "test": "mocha && ./test/integration/concurrent_read",
-    "test:watch": "npm run test -- -w -G",
+    "test:watch": "npm run test -- -w",
     "test:coverate-report": "nyc mocha && nyc report --reporter=html && echo 'Coverage report available on ./coverage/index.html'",
     "lint": "eslint lib test",
-    "build": "babel lib/ -d dist/",
-    "clean": "rm -rf dist/* ./coverage ./.nyc_output",
-    "prepublish": "npm run build",
-    "postbuild": "npm run test",
+    "clean": "rm -rf ./coverage ./.nyc_output",
     "pretest": "npm run lint"
   },
   "repository": {
@@ -38,15 +35,13 @@
   },
   "homepage": "https://github.com/bermi/disk-memoizer#readme",
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-preset-es2015": "^6.24.1",
     "eslint": "^5.16.0",
-    "mocha": "^6.0.2"
+    "mocha": "^6.1.4"
   },
   "dependencies": {
-    "async": "^2.6.2",
+    "async": "^3.0.1",
     "debug": "^4.1.1",
-    "glob": "^7.1.3",
+    "glob": "^7.1.4",
     "graceful-fs": "^4.1.15",
     "lockfile": "^1.0.4",
     "lru-cache": "^5.1.1",
